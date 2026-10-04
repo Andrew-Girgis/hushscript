@@ -4,7 +4,7 @@ Verified locally on 2026-10-04. Host: Omphalos, i9-9900K, 32 GiB RAM, RTX 3070 8
 
 ## Automated checks
 
-- All 48 service/privacy/chunking/codec/launcher tests passed locally and inside the read-only, network-isolated, non-root Docker test container with swap disabled.
+- All 54 service/privacy/chunking/codec/launcher tests passed locally and inside the read-only, network-isolated, non-root Docker test container with swap disabled.
 - Seven codec round trips cover WAV/PCM, MP3, M4A/AAC, FLAC, OGG/Opus, AAC/ADTS, and WebM/Opus.
 - Browser acceptance passed: sequential uploads, cleanup ACK before the next upload, speaker toggle, safe filename display, ZIP CRC/readability, cancellation, batch/size bounds, and mobile layout. Browser inference responses are simulated.
 - Actual CPU and GPU API checks passed: public speech, silence, malformed data, two-speaker labeling, JSON/ZIP exports, and DELETE followed by 404.
@@ -12,6 +12,7 @@ Verified locally on 2026-10-04. Host: Omphalos, i9-9900K, 32 GiB RAM, RTX 3070 8
 - Host guard expiry was tested by pausing only the launcher heartbeat while the independent sleep inhibitor remained active. Upload creation returned 503, the reserved job disappeared, and the service recovered when the launcher resumed.
 - Container TLS passed trusted handshakes and health checks with both a throwaway localhost certificate and an actual Tailscale-managed certificate. The test dialed loopback, verified the real DNS name and CA chain, and confirmed the one-use PEM was removed after loading. No remote Serve entry was enabled.
 - Worker restrictions deny new IPv4/IPv6 sockets and disable dumps. The live app accepts its inherited listener under the same socket restriction.
+- Six WSL launcher lifecycle cases pass with simulated Windows/Docker boundaries: rejected protection, Docker startup failure, certificate failure, guard exit, guard loss, and normal shutdown. They verify guard revocation and the stop request before helper release, without contacting a Windows machine.
 - Windows guard parser, mocked fail-closed probes, and C# power-helper compilation pass in a Linux PowerShell container. These checks do not exercise Windows registry/WMI/power APIs or WSL interop.
 - Linux ARM64 test image builds; both ASR and diarization library entry points load under ARM64 emulation. All 14 chunking/format/codec tests pass there. No native ARM host or Mac inference is claimed.
 - Kernel crash-dumper checks reject loaded, unreadable, and invalid states.
