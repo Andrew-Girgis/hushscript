@@ -1,0 +1,10 @@
+services:
+  app:
+    image: hushscript:cuda
+    build:
+      args:
+        BACKEND: cuda
+    devices:
+      - "nvidia.com/gpu=all"
+    environment:
+      HUSHSCRIPT_DEVICE: cuda

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hushscript · Local transcription</title><link rel="stylesheet" href="/style.css">
+<script src="/app.js" defer></script></head>
+<body><main>
+<header><a class="brand" href="/" aria-label="Hushscript home"><span class="mark" aria-hidden="true">h.</span>hushscript</a>
+<span id="health" class="status" role="status">Checking local worker…</span></header>
+<section class="intro"><p class="eyebrow">A LITTLE LESS LISTENING BACK.</p>
+<h1>Your conversations.<br><em>In words.</em></h1>
+<p class="lede">Turn recordings into transcripts on this machine.<br>Keep the words. Leave no uploaded audio behind.</p></section>
+<div id="notice" class="notice" role="alert" hidden></div>
+<div class="workspace">
+<section class="panel upload-panel" aria-labelledby="upload-heading">
+<div class="section-label"><span>01 / RECORDINGS</span><span id="count">0 files</span></div>
+<h2 id="upload-heading">Start with your audio</h2>
+<label id="drop" class="drop" for="files"><span class="upload-symbol" aria-hidden="true">↑</span>
+<strong>Drop recordings here</strong><span>or choose files from your device</span>
+<small>WAV, MP3, M4A, FLAC, OGG, AAC, WebM</small>
+<input id="files" type="file" accept="audio/*,.m4a,.webm,.mkv" multiple></label>
+<p class="limits">Up to 50 files · 250 MiB and 20 minutes per recording.<br>Files wait on your device and upload one at a time.</p>
+<label class="toggle-row" for="diarize"><span><strong>Separate speakers</strong><small>Label who spoke when. Best for two-person interviews.</small></span>
+<input type="checkbox" id="diarize" role="switch"></label>
+<div class="actions"><button id="start" class="primary" disabled>Transcribe recordings <span aria-hidden="true">↗</span></button>
+<button id="cancel" hidden>Cancel remaining</button></div>
+<ol id="queue" aria-label="Recording queue"></ol>
+<p class="footnote">English transcription. Speaker labels are estimates, not identities.</p>
+</section>
+<section class="panel results-panel" aria-labelledby="results-heading">
+<div class="section-label"><span>02 / TRANSCRIPTS</span><span id="completed">0 ready</span></div>
+<div class="result-title"><h2 id="results-heading">Ready to work with</h2><button id="clear" class="text-button" disabled>Clear</button></div>
+<div id="empty" class="empty"><span class="paper-icon" aria-hidden="true">≡</span><h3>From spoken to written.</h3><p>Your transcripts will appear here.<br>Download readable text and structured JSON<br>together in one bundle.</p></div>
+<div id="results" hidden><label class="sr-only" for="result-select">Choose transcript</label><select id="result-select"></select>
+<p id="result-meta" class="meta"></p><div id="review-notes" class="review-notes"></div>
+<pre id="preview" tabindex="0" aria-label="Transcript preview"></pre></div>
+<button id="download" class="download" disabled>Download bundle <span>TXT + Markdown + JSON</span></button>
+<p id="download-note" class="footnote">Results stay in this tab until you clear them or leave.</p>
+</section></div>
+<footer><span class="privacy-dot" aria-hidden="true"></span><p>Processed locally. Uploaded audio is held in memory and released after processing. Server results are removed after this tab receives them, or after 15 minutes. Your original files remain on your device.</p></footer>
+</main></body></html>

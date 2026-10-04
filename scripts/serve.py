@@ -1,0 +1,168 @@
+"""Start Hushscript with a verified host sleep inhibitor. No audio touches this process."""
+
+import argparse
+import json
+import os
+import platform
+import pwd
+import signal
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+GUARD = ROOT / ".runtime/host-guard"
+WHO = "Hushscript-" + str(os.getpid())
+
+
+def inhibitors():
+    return json.loads(
+        subprocess.check_output(["systemd-inhibit", "--list", "--json=short"], text=True, timeout=5)
+    )
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--gpu", action="store_true", help="Use the NVIDIA CUDA image")
+    ap.add_argument(
+        "--elevate-inhibitor",
+        action="store_true",
+        help="Authorize the sleep inhibitor using sudo in a terminal or pkexec on the desktop",
+    )
+    ap.add_argument("--tls-domain", help="Tailscale DNS name; HTTPS inside the container")
+    args = ap.parse_args()
+    if platform.system() != "Linux" or "microsoft" in platform.release().lower():
+        raise SystemExit(
+            "This launcher verifies native Linux host protections. See docs/PORTABILITY.md "
+            "for Docker Desktop prerequisites; uploads remain disabled without a host guard."
+        )
+    info = json.loads(
+        subprocess.check_output(["docker", "info", "--format", "{{json .}}"], text=True)
+    )
+    if (
+        info.get("CgroupVersion") != "2"
+        or "desktop" in info.get("OperatingSystem", "").lower()
+        or info.get("KernelVersion") != platform.release()
+    ):
+        raise SystemExit("A local native Linux Docker engine with cgroup v2 is required.")
+    cmd = ["docker", "compose", "-f", str(ROOT / "compose.yaml")]
+    if args.gpu:
+        cmd += ["-f", str(ROOT / "compose.gpu.yaml")]
+    if args.tls_domain:
+        if not args.tls_domain.endswith(".ts.net") or any(
+            c not in "abcdefghijklmnopqrstuvwxyz0123456789-." for c in args.tls_domain
+        ):
+            raise SystemExit("Use the full lowercase Tailscale DNS name.")
+        cmd += ["-f", str(ROOT / "compose.tls.yaml")]
+        os.environ["HUSHSCRIPT_HOSTS"] = args.tls_domain
+        os.environ["HUSHSCRIPT_ORIGINS"] = f"https://{args.tls_domain}:8445"
+    GUARD.mkdir(parents=True, exist_ok=True)
+    GUARD.chmod(0o755)
+    stop = threading.Event()
+    guard_failure = threading.Event()
+
+    def shutdown(signum, frame):
+        stop.set()
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, shutdown)
+
+    def write_guard(protected):
+        temp = GUARD / "status.new"
+        temp.write_text(json.dumps({"protected": protected, "updated_at": time.time()}))
+        temp.chmod(0o644)
+        temp.replace(GUARD / "status.json")
+
+    # The helper independently retains the inhibitor until the container has stopped,
+    # even if this launcher is killed. Its stdin closes when the launcher exits.
+    helper = ROOT / "scripts/inhibit_helper.py"
+    inhibit_command = [
+        "systemd-inhibit",
+        "--what=sleep:shutdown",
+        "--mode=block",
+        "--who=" + WHO,
+        "--why=Audio processing must not be written into a hibernation image",
+    ]
+    if args.elevate_inhibitor:
+        inhibit_command = [
+            "sudo" if sys.stdin.isatty() else "pkexec",
+            *inhibit_command,
+            "runuser",
+            "-u",
+            pwd.getpwuid(os.getuid()).pw_name,
+            "--",
+        ]
+    inhibit_command += [sys.executable, str(helper), *cmd]
+    inhibitor = subprocess.Popen(inhibit_command, stdin=subprocess.PIPE, cwd=ROOT)
+    try:
+        deadline = time.monotonic() + (120 if args.elevate_inhibitor else 10)
+        while time.monotonic() < deadline:
+            if inhibitor.poll() is not None:
+                raise RuntimeError("Could not acquire the host sleep/shutdown inhibitor.")
+            if any(
+                row["who"] == WHO
+                and row["mode"] == "block"
+                and "sleep" in row["what"]
+                and "shutdown" in row["what"]
+                for row in inhibitors()
+            ):
+                break
+            time.sleep(0.2)
+        else:
+            raise RuntimeError("The host did not confirm the sleep inhibitor.")
+
+        def heartbeat():
+            while not stop.is_set():
+                try:
+                    protected = inhibitor.poll() is None and any(
+                        row["who"] == WHO and row["mode"] == "block" for row in inhibitors()
+                    )
+                    write_guard(protected)
+                    if not protected:
+                        guard_failure.set()
+                        stop.set()
+                        return
+                except Exception:
+                    guard_failure.set()
+                    stop.set()
+                    return
+                stop.wait(1)
+
+        write_guard(True)
+        thread = threading.Thread(target=heartbeat, daemon=True)
+        thread.start()
+        subprocess.run([*cmd, "up", "-d", "--no-build"], check=True, cwd=ROOT)
+        if args.tls_domain:
+            from provision_tls import provision
+
+            provision(cmd, args.tls_domain)
+        address = f"https://{args.tls_domain}:8445" if args.tls_domain else "http://127.0.0.1:8787"
+        print(f"Hushscript: {address} — Ctrl+C stops and clears server memory.", flush=True)
+        while not stop.wait(1):
+            if inhibitor.poll() is not None:
+                raise RuntimeError("Host sleep inhibitor stopped.")
+        if guard_failure.is_set():
+            raise RuntimeError("Host privacy verification failed; stopping Hushscript.")
+    finally:
+        stop.set()
+        if "thread" in locals():
+            thread.join(timeout=6)
+        write_guard(False)
+        # The helper stops Docker before releasing its independent inhibitor.
+        if inhibitor.stdin:
+            inhibitor.stdin.close()
+        try:
+            inhibitor.wait(timeout=40)
+        except subprocess.TimeoutExpired:
+            # Do not terminate the inhibitor while a container may still hold inputs.
+            print(
+                "Container stop is taking longer than expected; sleep stays inhibited.",
+                file=sys.stderr,
+            )
+            inhibitor.wait()
+
+
+if __name__ == "__main__":
+    main()

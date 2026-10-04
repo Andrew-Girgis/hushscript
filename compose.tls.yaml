@@ -1,0 +1,5 @@
+services:
+  app:
+    command: ["python", "-m", "hushscript.server", "--tls-pem", "/tmp/hushscript-tls.pem"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ssl,urllib.request; urllib.request.urlopen('https://127.0.0.1:8787/api/health', context=ssl._create_unverified_context(), timeout=3)"]

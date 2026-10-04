@@ -1,0 +1,36 @@
+services:
+  app:
+    image: hushscript:cpu
+    build:
+      context: .
+      target: runtime
+      args:
+        BACKEND: cpu
+    network_mode: host
+    read_only: true
+    user: "10001:10001"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 6g
+    memswap_limit: 6g
+    cpus: 6
+    pids_limit: 128
+    ulimits:
+      core: 0
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16777216,mode=1777
+    volumes:
+      - ./models:/models:ro
+      - ./.runtime/host-guard:/host-guard:ro
+    environment:
+      HUSHSCRIPT_DEVICE: cpu
+      HUSHSCRIPT_HOSTS:
+      HUSHSCRIPT_ORIGINS:
+    logging:
+      driver: none
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/api/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
