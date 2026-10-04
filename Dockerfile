@@ -27,6 +27,7 @@ FROM runtime AS test
 USER root
 RUN uv sync --frozen --group dev
 COPY --chown=10001:10001 tests tests
+COPY --chown=10001:10001 scripts scripts
 USER 10001:10001
 CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider"]
 

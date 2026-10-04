@@ -1,25 +1,26 @@
-"""Check container-side TLS using a throwaway certificate on tmpfs."""
+"""Check container-side TLS without exposing a Tailscale service."""
 
 import argparse
+import http.client
 import json
+import socket
 import ssl
 import subprocess
 import tempfile
 import time
-import urllib.error
-import urllib.request
+from contextlib import contextmanager
 from pathlib import Path
 
-from provision_tls import INSTALL
+from provision_tls import INSTALL, certificate
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--image", default="hushscript:cuda")
-    args = parser.parse_args()
-    name = "hushscript-tls-check"
+@contextmanager
+def credentials(domain):
+    if domain:
+        yield certificate(domain), ssl.create_default_context(), domain
+        return
     with tempfile.TemporaryDirectory(prefix="hushscript-tls-", dir="/dev/shm") as directory:
         cert, key = Path(directory) / "cert.pem", Path(directory) / "key.pem"
         subprocess.run(
@@ -45,7 +46,20 @@ def main():
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        context = ssl.create_default_context(cadata=cert.read_text())
+        yield (
+            cert.read_bytes() + key.read_bytes(),
+            ssl.create_default_context(cadata=cert.read_text()),
+            "localhost",
+        )
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--image", default="hushscript:cuda")
+    parser.add_argument("--tls-domain", help="Test the actual Tailscale-managed certificate")
+    args = parser.parse_args()
+    name = "hushscript-tls-check"
+    with credentials(args.tls_domain) as (pem, context, domain):
         command = [
             "docker",
             "run",
@@ -74,6 +88,8 @@ def main():
             f"{ROOT / 'models'}:/models:ro",
             "-v",
             f"{ROOT / '.runtime/host-guard'}:/host-guard:ro",
+            "-e",
+            f"HUSHSCRIPT_HOSTS={domain}",
             args.image,
             "python",
             "-m",
@@ -87,18 +103,25 @@ def main():
         try:
             subprocess.run(
                 ["docker", "exec", "-i", name, "python", "-c", INSTALL],
-                input=cert.read_bytes() + key.read_bytes(),
+                input=pem,
                 check=True,
             )
             for _ in range(50):
+                connection = http.client.HTTPConnection(domain, 8791, timeout=1)
                 try:
-                    with urllib.request.urlopen(
-                        "https://127.0.0.1:8791/api/health", context=context, timeout=1
-                    ) as response:
+                    # Dial only loopback; still verify the real certificate's DNS
+                    # name and CA chain using SNI and the system trust store.
+                    with socket.create_connection(("127.0.0.1", 8791), timeout=1) as raw:
+                        connection.sock = context.wrap_socket(raw, server_hostname=domain)
+                        connection.request("GET", "/api/health")
+                        response = connection.getresponse()
+                        assert response.status == 200
                         assert json.load(response)["ready"]
                     break
-                except (OSError, urllib.error.URLError):
+                except OSError:
                     time.sleep(0.1)
+                finally:
+                    connection.close()
             else:
                 raise RuntimeError("TLS service did not become ready")
             subprocess.run(

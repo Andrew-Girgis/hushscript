@@ -1,6 +1,7 @@
 """Copy a Tailscale-managed certificate into container tmpfs without a host key file."""
 
 import argparse
+import shutil
 import subprocess
 
 # No audio or transcript passes through this setup helper. Tailscale retains its
@@ -22,11 +23,11 @@ finally:
 """
 
 
-def provision(command, domain):
+def certificate(domain):
     # Keep PEM off argv, environment, persistent bind mounts, and tool output.
     result = subprocess.run(
         [
-            "tailscale",
+            shutil.which("tailscale") or shutil.which("tailscale.exe") or "tailscale",
             "cert",
             "--cert-file",
             "-",
@@ -40,9 +41,23 @@ def provision(command, domain):
         check=True,
         timeout=90,
     )
+    return result.stdout
+
+
+def provision(command, domain):
+    provision_pem(command, certificate(domain))
+
+
+def provision_pem(command, pem):
+    if isinstance(pem, str):
+        pem = pem.encode()
+    if not isinstance(pem, bytes) or len(pem) > 65536:
+        raise ValueError("A bounded PEM certificate/key bundle is required.")
+    if b"PRIVATE KEY-----" not in pem or b"BEGIN CERTIFICATE" not in pem:
+        raise ValueError("The TLS bundle must contain a certificate and private key.")
     subprocess.run(
         [*command, "exec", "-T", "app", "python", "-c", INSTALL],
-        input=result.stdout,
+        input=pem,
         check=True,
         timeout=15,
     )

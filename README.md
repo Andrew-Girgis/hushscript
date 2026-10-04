@@ -2,7 +2,7 @@
 
 Local interview transcription with a browser uploader and HTTP API. Audio is processed in memory; the output is a downloadable bundle of plain text, Markdown, and timestamped JSON.
 
-**Status:** native Linux transcription and speaker labeling have passed real CPU and NVIDIA inference checks on Omphalos. Private sharing is prepared but not enabled; approved-device policy and remote access tests remain pending. Windows/macOS launchers and ARM64 verification are unfinished. See [the verification record](docs/VERIFICATION.md).
+**Status:** native Linux transcription and speaker labeling have passed real CPU and NVIDIA inference checks on Omphalos. Private sharing is prepared but not enabled; approved-device policy and remote access tests remain pending. The WSL2 CPU launcher is implemented but awaits a real Windows run. ARM64 builds and selected emulated tests pass; macOS hosting awaits host protection work and testing. See [the verification record](docs/VERIFICATION.md).
 
 ## What it does
 
@@ -61,9 +61,9 @@ The launcher deliberately refuses uploads without host protection. Running Docke
 
 Read [the privacy boundaries](docs/PRIVACY.md) before processing sensitive material. The container has a read-only filesystem, disabled swap, no persistent writable mounts, disabled content logging, and restricted networking. Native Linux host networking binds directly to loopback, avoiding an unprotected Docker forwarding process. Each recording uses a fresh worker process with core dumps and internet sockets disabled. Uploaded bytes use Linux anonymous memory files, not temporary disk files.
 
-Normal sleep/hibernation is inhibited while the service can hold data. Administrators can override OS protections; physical memory erasure is not promised. Original files on the uploader's device and intentionally downloaded transcripts are outside server cleanup.
+On native Linux, normal sleep/hibernation is inhibited while the service can hold data. Administrators can override OS protections; physical memory erasure is not promised. Original files on the uploader's device and intentionally downloaded transcripts are outside server cleanup.
 
-[Portability status](docs/PORTABILITY.md) distinguishes image targets from tested deployments. Docker Desktop introduces host VM and swap considerations; the native Linux launcher does not pretend to verify those.
+[Portability status](docs/PORTABILITY.md) distinguishes image targets from tested deployments. See [WSL2 setup](docs/WSL.md) for the Windows CPU path and [the Mac check](docs/MACOS.md) for testing on macOS. Docker Desktop introduces host VM and swap considerations; uploads remain disabled on unverified hosts.
 
 ## API and agents
 

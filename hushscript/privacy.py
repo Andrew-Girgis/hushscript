@@ -66,8 +66,22 @@ def deny_network():
         sec.seccomp_release(ctx)
 
 
+def kernel_dump_problem(path="/sys/kernel/kexec_crash_loaded"):
+    try:
+        value = Path(path).read_text().strip()
+    except OSError:
+        return "Cannot verify host kernel crash-dump protection."
+    if value == "0":
+        return None
+    if value == "1":
+        return "A host kernel crash dumper is loaded; uploads are disabled."
+    return "Cannot verify host kernel crash-dump protection."
+
+
 def readiness(model_dir, runtime_dir, guard_path):
     errors = []
+    if problem := kernel_dump_problem():
+        errors.append(problem)
     try:
         if Path("/sys/fs/cgroup/memory.swap.max").read_text().strip() != "0":
             errors.append("Container swap is not disabled.")

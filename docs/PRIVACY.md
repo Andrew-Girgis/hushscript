@@ -15,6 +15,7 @@ A browser download request is not proof that the user saved the ZIP successfully
 ## Server protections
 
 - Unprivileged UID, read-only root filesystem, read-only model mounts, dropped capabilities, no privilege escalation.
+- Readiness rejects a loaded kernel crash dumper and any missing or unreadable crash-dumper status.
 - Container memory limit equals memory-plus-swap limit; readiness verifies memory.swap.max=0.
 - Small tmpfs for library scratch space, no audio paths or result volume.
 - Core limits and PR_SET_DUMPABLE=0 for the app and worker. The latter also addresses hosts using a piped core-dump handler.
@@ -30,7 +31,9 @@ Anonymous memory can otherwise reach disk through swap, crash dumps, hibernation
 
 The native Linux launcher verifies a local cgroup-v2 engine and acquires a blocking logind sleep/shutdown inhibitor. An independent helper retains that inhibitor until the app container stops, including when the launcher is killed. A periodically renewed guard record contains only protection status and a timestamp, never audio or transcript data. The app refuses new work without a current guard and disposes of existing jobs when the guard expires.
 
-The launcher does not change global sleep or swap settings. It inhibits normal sleep while the service runs. An administrator forcing suspend, altering the guard, changing Docker controls, attaching a debugger, enabling packet capture, or making machine snapshots is outside this boundary.
+The [WSL2 launcher](WSL.md) also checks Windows paging, hibernation, system/live crash dumps, WSL crash-dump collection, and guest swap. A separate Windows helper retains an idle-sleep request until Docker stops. This path is implemented but has not been exercised on a real Windows host. TLS terminates in the container so the Windows forwarding path handles ciphertext. macOS hosting remains disabled until host VM protections are established; [MACOS.md](MACOS.md) provides a read-only check.
+
+The native Linux launcher does not change global sleep or swap settings. It inhibits normal sleep while the service runs. An administrator forcing suspend, altering the guard, changing Docker controls, attaching a debugger, enabling packet capture, or making machine snapshots is outside this boundary.
 
 ## Scope of the promise
 

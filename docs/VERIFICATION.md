@@ -4,14 +4,17 @@ Verified locally on 2026-10-04. Host: Omphalos, i9-9900K, 32 GiB RAM, RTX 3070 8
 
 ## Automated checks
 
-- All 29 service/privacy/chunking/codec tests passed locally and inside the read-only, network-isolated, non-root Docker test container with swap disabled.
+- All 48 service/privacy/chunking/codec/launcher tests passed locally and inside the read-only, network-isolated, non-root Docker test container with swap disabled.
 - Seven codec round trips cover WAV/PCM, MP3, M4A/AAC, FLAC, OGG/Opus, AAC/ADTS, and WebM/Opus.
 - Browser acceptance passed: sequential uploads, cleanup ACK before the next upload, speaker toggle, safe filename display, ZIP CRC/readability, cancellation, batch/size bounds, and mobile layout. Browser inference responses are simulated.
 - Actual CPU and GPU API checks passed: public speech, silence, malformed data, two-speaker labeling, JSON/ZIP exports, and DELETE followed by 404.
 - Active GPU inference cancellation completed in 0.004 seconds in one run. An interrupted upload was removed and the worker slot was reusable.
 - Host guard expiry was tested by pausing only the launcher heartbeat while the independent sleep inhibitor remained active. Upload creation returned 503, the reserved job disappeared, and the service recovered when the launcher resumed.
-- Container TLS passed a trusted handshake and health check; the one-use PEM was removed after loading.
+- Container TLS passed trusted handshakes and health checks with both a throwaway localhost certificate and an actual Tailscale-managed certificate. The test dialed loopback, verified the real DNS name and CA chain, and confirmed the one-use PEM was removed after loading. No remote Serve entry was enabled.
 - Worker restrictions deny new IPv4/IPv6 sockets and disable dumps. The live app accepts its inherited listener under the same socket restriction.
+- Windows guard parser, mocked fail-closed probes, and C# power-helper compilation pass in a Linux PowerShell container. These checks do not exercise Windows registry/WMI/power APIs or WSL interop.
+- Linux ARM64 test image builds; both ASR and diarization library entry points load under ARM64 emulation. All 14 chunking/format/codec tests pass there. No native ARM host or Mac inference is claimed.
+- Kernel crash-dumper checks reject loaded, unreadable, and invalid states.
 - CPU and CUDA images build. The stale NVIDIA CDI UVM mapping was refreshed; actual GPU model loading now succeeds.
 
 ## Model comparison
@@ -47,8 +50,8 @@ After an earlier long GPU suite, the app cgroup reported a 489.9 MiB memory peak
 
 ## Remaining delivery work
 
-- Approved-device Tailscale policy, production certificate provisioning, and allowed/denied remote device tests.
-- Windows/macOS host privacy launchers and ARM64 build/run verification.
+- Approved-device Tailscale policy, enabling the private TCP entry, and allowed/denied remote device tests. Actual certificate provisioning has passed locally.
+- Actual WSL2 startup/cleanup verification, protected macOS hosting, and native ARM host inference. WSL2 CPU code and Mac preflight instructions are present; user-led Pythia testing is planned.
 - Evaluation on representative interview recordings for transcription and speaker accuracy.
 
 The server result TTL is tested with a shortened clock interval in automated tests; a full fifteen-minute wall-clock run was not required. Shutdown and process cleanup have automated coverage; no forced host sleep or power-loss test was performed.
@@ -59,4 +62,6 @@ Use the README commands for unit, container, and browser checks. Run scripts/che
 
 scripts/benchmark.py uses only an in-memory public fixture, verifies the guard/swap settings, and disables networking before model inference. Build the benchmark Docker target for faster-whisper dependencies. CPU Parakeet can run using the normal CPU image with the script bind-mounted into /app.
 
-scripts/check_tls.py creates an isolated temporary container and a throwaway certificate in host tmpfs, then removes both. No real recordings are involved.
+scripts/check_tls.py creates an isolated temporary container and a throwaway certificate in host tmpfs, then removes both. Its --tls-domain option instead exercises an actual Tailscale-managed certificate without exposing a remote service. No recordings are involved.
+
+The PowerShell parser/probe checks are in scripts/check_windows_guard.ps1. The WSL and Mac guides describe platform prerequisites and remaining real-host checks.

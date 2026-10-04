@@ -22,3 +22,7 @@ models/
 *.aiff
 *.aif
 *.wma
+*.pem
+*.key
+*.p12
+*.pfx

@@ -4,7 +4,6 @@ import argparse
 import json
 import os
 import platform
-import pwd
 import signal
 import subprocess
 import sys
@@ -31,9 +30,23 @@ def main():
         action="store_true",
         help="Authorize the sleep inhibitor using sudo in a terminal or pkexec on the desktop",
     )
-    ap.add_argument("--tls-domain", help="Tailscale DNS name; HTTPS inside the container")
+    tls = ap.add_mutually_exclusive_group()
+    tls.add_argument("--tls-domain", help="Tailscale DNS name; HTTPS inside the container")
+    tls.add_argument("--local-tls", action="store_true", help="Use HUSHSCRIPT_TLS_PEM from s")
     args = ap.parse_args()
-    if platform.system() != "Linux" or "microsoft" in platform.release().lower():
+    pem = os.environ.pop("HUSHSCRIPT_TLS_PEM", None)
+    if args.local_tls and not pem:
+        raise SystemExit("Inject HUSHSCRIPT_TLS_PEM using s. See docs/WSL.md.")
+    if args.tls_domain and (
+        not args.tls_domain.endswith(".ts.net")
+        or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789-." for c in args.tls_domain)
+    ):
+        raise SystemExit("Use the full lowercase Tailscale DNS name.")
+    if platform.system() == "Linux" and "microsoft" in platform.release().lower():
+        from serve_wsl import launch
+
+        return launch(args, pem)
+    if platform.system() != "Linux":
         raise SystemExit(
             "This launcher verifies native Linux host protections. See docs/PORTABILITY.md "
             "for Docker Desktop prerequisites; uploads remain disabled without a host guard."
@@ -50,14 +63,13 @@ def main():
     cmd = ["docker", "compose", "-f", str(ROOT / "compose.yaml")]
     if args.gpu:
         cmd += ["-f", str(ROOT / "compose.gpu.yaml")]
-    if args.tls_domain:
-        if not args.tls_domain.endswith(".ts.net") or any(
-            c not in "abcdefghijklmnopqrstuvwxyz0123456789-." for c in args.tls_domain
-        ):
-            raise SystemExit("Use the full lowercase Tailscale DNS name.")
+    if args.tls_domain or args.local_tls:
         cmd += ["-f", str(ROOT / "compose.tls.yaml")]
-        os.environ["HUSHSCRIPT_HOSTS"] = args.tls_domain
-        os.environ["HUSHSCRIPT_ORIGINS"] = f"https://{args.tls_domain}:8445"
+        if args.tls_domain:
+            os.environ["HUSHSCRIPT_HOSTS"] = args.tls_domain
+            os.environ["HUSHSCRIPT_ORIGINS"] = f"https://{args.tls_domain}:8445"
+        else:
+            os.environ["HUSHSCRIPT_ORIGINS"] = "https://localhost:8787,https://127.0.0.1:8787"
     GUARD.mkdir(parents=True, exist_ok=True)
     GUARD.chmod(0o755)
     stop = threading.Event()
@@ -86,6 +98,8 @@ def main():
         "--why=Audio processing must not be written into a hibernation image",
     ]
     if args.elevate_inhibitor:
+        import pwd
+
         inhibit_command = [
             "sudo" if sys.stdin.isatty() else "pkexec",
             *inhibit_command,
@@ -138,7 +152,17 @@ def main():
             from provision_tls import provision
 
             provision(cmd, args.tls_domain)
-        address = f"https://{args.tls_domain}:8445" if args.tls_domain else "http://127.0.0.1:8787"
+        elif args.local_tls:
+            from provision_tls import provision_pem
+
+            provision_pem(cmd, pem)
+        address = (
+            f"https://{args.tls_domain}:8445"
+            if args.tls_domain
+            else "https://localhost:8787"
+            if args.local_tls
+            else "http://127.0.0.1:8787"
+        )
         print(f"Hushscript: {address} — Ctrl+C stops and clears server memory.", flush=True)
         while not stop.wait(1):
             if inhibitor.poll() is not None:

@@ -8,7 +8,7 @@ Hushscript supports HTTPS inside its protected container. The launcher obtains t
 
 Use raw TCP forwarding. Tailscale's normal HTTPS reverse-proxy mode terminates TLS in its host process, outside the app's memory protections.
 
-A local TLS test passed with certificate verification enabled, a healthy app response, and confirmation that the one-use PEM was removed. Production Tailscale certificate provisioning and remote device tests remain pending.
+Local TLS tests passed with both a temporary certificate and an actual Tailscale-managed certificate, with certificate verification enabled, a healthy app response, and confirmation that the one-use PEM was removed. These tests used loopback and did not enable a remote Serve entry. Device policy and remote connection tests remain pending.
 
 ## Finish the device policy first
 

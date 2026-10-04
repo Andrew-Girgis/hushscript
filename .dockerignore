@@ -21,3 +21,7 @@ __pycache__
 *.aiff
 *.aif
 *.wma
+*.pem
+*.key
+*.p12
+*.pfx
