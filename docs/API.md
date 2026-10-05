@@ -1,6 +1,6 @@
 # Local HTTP API
 
-Base URL: http://127.0.0.1:8787. The /openapi.json endpoint exposes the API contract without external documentation scripts. All endpoints return Cache-Control: no-store.
+Base URL on Omphalos: http://127.0.0.1:8787 in local mode. After [isolated private sharing](SHARING.md) is enabled, use the HTTPS address printed by the launcher, for example https://hushscript.<your-tailnet>.ts.net:8445. The same service provides the browser and API; accepted Tailscale share recipients can use either. The /openapi.json endpoint exposes the API contract without external documentation scripts. All endpoints return Cache-Control: no-store.
 
 ## Process one recording
 
