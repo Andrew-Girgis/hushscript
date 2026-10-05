@@ -21,6 +21,7 @@ services:
       TS_STATE_DIR: /var/lib/tailscale
       TS_HOSTNAME: hushscript
       TS_AUTH_ONCE: "true"
+      TS_BOOT_TIMEOUT: 1h
       TS_ACCEPT_DNS: "false"
     volumes:
       - tailnet-state:/var/lib/tailscale

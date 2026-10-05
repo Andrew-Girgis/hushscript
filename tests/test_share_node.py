@@ -60,3 +60,21 @@ def test_isolated_launcher_keeps_its_origin_and_refuses_overlapping_app(monkeypa
     monkeypatch.setattr("share_node.app_running", lambda: True)
     with pytest.raises(SystemExit, match="Stop the current Hushscript launcher"):
         configure_tls(SimpleNamespace(isolated_share=True, tls_domain=None), ["docker", "compose"])
+
+
+def test_private_start_waits_for_verified_tls_readiness(monkeypatch):
+    from types import SimpleNamespace
+
+    from share_node import check_app
+
+    attempts = []
+
+    def probe(command, **kwargs):
+        attempts.append(command)
+        return SimpleNamespace(returncode=1 if len(attempts) == 1 else 0)
+
+    monkeypatch.setattr("share_node.subprocess.run", probe)
+    monkeypatch.setattr("share_node.time.sleep", lambda seconds: None)
+    check_app(["docker", "compose"], "hushscript.example.ts.net")
+    assert len(attempts) == 2
+    assert attempts[1][-1] == "hushscript.example.ts.net"

@@ -3,6 +3,7 @@
 import argparse
 import json
 import subprocess
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -79,11 +80,22 @@ try:
 finally:
     conn.close()
 """
-    subprocess.run(
-        [*command, "exec", "-T", "app", "python", "-c", code, name],
-        check=True,
-        timeout=15,
-    )
+    probe = [*command, "exec", "-T", "app", "python", "-c", code, name]
+    deadline = time.monotonic() + 45
+    while time.monotonic() < deadline:
+        try:
+            result = subprocess.run(
+                probe,
+                capture_output=True,
+                timeout=8,
+                check=False,
+            )
+            if result.returncode == 0:
+                return
+        except subprocess.TimeoutExpired:
+            pass
+        time.sleep(0.25)
+    raise RuntimeError("The protected app did not become ready over verified HTTPS.")
 
 
 def enable(command):
