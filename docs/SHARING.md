@@ -1,68 +1,51 @@
-# Private sharing
+# Private app sharing
 
-The agreed entry point is Tailscale Serve plus a single-use share link for Omphalos. The coworker can accept from their own Tailscale account without joining the owner's tailnet. Only Hushscript on TCP 8445 should be reachable through that share. Remote exposure is currently disabled; existing Serve services must be preserved.
+Hushscript's recommended remote entry point is its **own Tailscale node** inside an isolated Docker network. Share the `hushscript` node with the coworker, not the Omphalos host node. The node serves only Hushscript on TCP 8445. Omphalos's existing Tailscale services and host ports remain on a different node and network namespace.
 
-## What is ready
+The browser and [HTTP API](API.md) use the same HTTPS address. A coworker who accepts the share can use both. API jobs use short-lived per-job capability tokens; Tailscale controls who can reach the app. There is no shell or host filesystem service in the app-only node.
 
-Hushscript supports HTTPS inside its protected container. The launcher obtains the certificate from Tailscale's existing system credential store and sends it through stdin into a temporary container RAM file. The server loads and removes that file. Keys never appear in command arguments, environment variables, this repository, or a project key file.
+This setup has passed a local isolated-network test with a throwaway TLS certificate and no authenticated Tailscale node. Actual node authentication, certificate issuance, and access from a coworker remain to be verified. The existing Omphalos service is still local-only until the steps below are completed.
 
-Use raw TCP forwarding. Tailscale's normal HTTPS reverse-proxy mode terminates TLS in its host process, outside the app's memory protections.
+## Owner setup on Omphalos
 
-Local TLS tests passed with both a temporary certificate and an actual Tailscale-managed certificate, with certificate verification enabled, a healthy app response, and confirmation that the one-use PEM was removed. These tests used loopback and did not enable a remote Serve entry. Device policy and remote connection tests remain pending.
-
-## Review the access policy first
-
-A share link makes **the machine** visible to the recipient; it does not limit the recipient to one URL by itself. Tailscale applies the existing tailnet access policy to connections to that machine. Omphalos also has services on 443, 8443, and 8444, so the complete policy must be reviewed before a link is created.
-
-1. Read the current policy from Tailscale Admin Console → Access controls. Preserve access for the owner's existing devices and services.
-2. Check every grant and legacy ACL matching external shared users, especially wildcard sources, destinations, or ports. Grants are additive: a narrow rule does not cancel a broad one.
-3. Permit the shared recipient only TCP 8445 on Omphalos. Deny access to its other ports, including 443, 8443, 8444, and SSH, by ensuring no other rule grants them.
-4. Save and verify the policy, then create a **single-use** share link for Omphalos from the Machines page. Send that link only to the intended coworker through your own channel. A reusable link is unnecessary.
-5. After the recipient accepts, check the displayed identity, test that 8445 works and the other ports fail from their Tailscale connection, and revoke the share if the identity or tests are wrong.
-
-A narrow grant can allow this port without knowing the recipient's device name in advance:
-
-~~~json
-{
-  "src": ["autogroup:shared"],
-  "dst": ["OMPHALOS_TAILSCALE_IP"],
-  "ip": ["tcp:8445"]
-}
-~~~
-
-This fragment is **not** a complete restrictive policy. An existing wildcard grant or ACL could still allow other ports. The policy should be checked and edited as a whole before enabling a share. Link-based sharing exposes only the selected machine to the recipient, not the rest of the tailnet; the port restriction is a separate policy decision.
-
-A recipient needs a Tailscale account and must be an Owner, Admin, or IT admin of their own tailnet to accept a machine share. Treat the invite link as a secret until accepted. The public GitHub repository is an alternative if they prefer to run the app on their own machine; [WSL2 has host prerequisites](WSL.md) and has not been tested on Windows.
-
-## Start after the policy is verified
-
-Port 8445 is proposed because Omphalos already uses 443, 8443, and 8444. Confirm it remains unused. Stop the existing Hushscript launcher before starting TLS mode.
+1. Build the runtime image and connect the dedicated node. This first step does not restart the current Hushscript app. It prompts you to log the new `hushscript` node into **your** Tailscale account in a browser:
 
 ~~~bash
-python3 scripts/serve.py --gpu --elevate-inhibitor --tls-domain MACHINE.TAILNET.ts.net
+cd /home/girgie/Projects/hushscript
+docker compose -f compose.yaml -f compose.gpu.yaml -f compose.tls.yaml -f compose.isolated.yaml build
+python3 scripts/share_node.py setup
+python3 scripts/share_node.py status
 ~~~
 
-Use the real lowercase DNS name. Omit --gpu on CPU hosts. The command acquires host protection, starts the TLS container, and provisions its certificate. It does not modify tailnet access rules or expose the service itself.
+Tailscale keeps this node's login state in the Docker-managed `tailnet-state` volume. That state contains credentials, not recordings. The sidecar has no published host ports, uses userspace networking, and forwards raw TLS ciphertext to the app. No `TS_AUTHKEY` is placed in a Compose file or environment variable.
 
-Then enable only the new TCP entry:
+2. Stop the **old Hushscript launcher** in its terminal with Ctrl+C. Wait until its app container stops. Start isolated sharing in a terminal and leave it open:
 
 ~~~bash
-tailscale serve --bg --tcp=8445 tcp://127.0.0.1:8787
+python3 scripts/serve.py --gpu --elevate-inhibitor --isolated-share
 ~~~
 
-Visit https://MACHINE.TAILNET.ts.net:8445. The recipient uses the full owner-tailnet DNS name after accepting the share. Verify allowed and denied ports from their device before uploading recordings. Never use Funnel. To remove only this entry:
+The launcher refuses to replace a running Hushscript app. It checks the host sleep/shutdown inhibitor, starts the protected app in the isolated node's network space, gets the certificate using that node's Tailscale identity, verifies a healthy HTTPS response, then enables raw TCP Serve on 8445. On shutdown, the independent helper stops both containers before releasing the inhibitor. The original Omphalos Tailscale node and its services on 443, 8443, and 8444 are untouched.
 
-~~~bash
-tailscale serve --tcp=8445 off
-~~~
+3. The launcher prints the new `https://hushscript.<your-tailnet>.ts.net:8445` address. Verify it from one of your own Tailscale devices before inviting anyone. The API health endpoint is at `/api/health`; the browser interface is at `/`. Do not override certificate warnings.
 
-The launcher obtains a certificate with at least 48 hours remaining. It does not yet hot-reload certificates; restart it before the certificate expires. Do not bypass certificate warnings.
+## Invite the coworker
+
+In Tailscale Admin Console → Machines, select the **hushscript** node, choose Share → Copy invite link, leave Reusable link off, and send the single-use link through your own channel. Never share the **omphalos** node. The coworker accepts from their own Tailscale account; they do not join your tailnet. Tailscale says a recipient needs to be an Owner, Admin, or IT admin of their own tailnet to accept a machine share.
+
+After acceptance, confirm the recipient's displayed identity and test the browser and API from their device. The share gives them only this app node. For the strongest policy rule, also grant shared users only TCP 8445 to the new node and ensure no broader grant applies to it. The dedicated node remains separate from Omphalos even if a broad policy exists. Do not use Funnel or a public password endpoint.
+
+The coworker can alternatively [clone the public repository](https://github.com/Andrew-Girgis/hushscript). Their local inference needs the platform-specific host protections documented in [WSL.md](WSL.md) or [PORTABILITY.md](PORTABILITY.md).
+
+## Remove access
+
+Revoke the share from the `hushscript` node's Share dialog in the admin console. Stopping the isolated launcher also stops the app and Tailscale sidecar. Revoking a share blocks the coworker's access without changing their GitHub access to the public source code.
+
+The certificate is fetched with at least 48 hours remaining. Restart the launcher before it expires; hot reload is not implemented. The certificate private key is piped from the sidecar into app tmpfs and removed after loading. The app does not persist uploaded audio or server transcripts.
 
 ## References
 
-- [Serve raw TCP forwarding](https://tailscale.com/docs/reference/tailscale-cli/serve)
-- [Tailscale HTTPS certificates](https://tailscale.com/docs/how-to/set-up-https-certificates)
-- [Grants](https://tailscale.com/docs/features/access-control/grants)
-- [Share a machine with an external user](https://tailscale.com/docs/features/sharing)
-
-The public GitHub repository does not expose the running service or receive recordings.
+- [Sharing a machine with an external user](https://tailscale.com/docs/features/sharing)
+- [Tailscale Docker configuration](https://tailscale.com/docs/features/containers/docker/docker-params)
+- [Userspace networking](https://tailscale.com/docs/concepts/userspace-networking)
+- [Tailscale Serve raw TCP forwarding](https://tailscale.com/docs/reference/tailscale-cli/serve)

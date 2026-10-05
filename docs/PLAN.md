@@ -9,7 +9,7 @@
 - Uploaded audio never persisted. No disk spooling, content logs, telemetry, model training, cloud inference, or runtime model downloads. Clean up on success, cancellation, timeout, disconnect, or failure.
 - Server results are memory-only; purge after acknowledged receipt or 15 minutes. Browser can assemble a batch bundle after receiving each result.
 - Inspect swap, crash dumps, sleep/hibernation, GPU memory preservation, and proxy handling. Fail closed when required protections are absent. No claim of forensic erasure of transient physical memory; uploader's original files are outside server retention.
-- Tailscale Serve is permitted for private networking (hosted coordination and encrypted relay accepted). Share only Omphalos with the coworker through a single-use external machine invite, and restrict the shared recipient to Hushscript port 8445 using the full tailnet policy. The owner's existing access stays intact. No Funnel or public password endpoint.
+- Tailscale Serve is permitted for private networking (hosted coordination and encrypted relay accepted). Run Hushscript in a dedicated Tailscale sidecar network and share only that app node with the coworker through a single-use external machine invite. The Omphalos host node and its other services stay separate. No Funnel or public password endpoint.
 - Evaluate Parakeet v3 and Nemotron 3 diarization, compare transcription with faster-whisper locally. Pin selected model artifacts and measure correctness, latency, and memory.
 - Tests must cover limits, cancellation, malformed/silent audio, cleanup, result isolation, offline operation, and an actual model transcription.
 

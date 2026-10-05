@@ -1,0 +1,35 @@
+# Dedicated Tailscale identity. Share this node, never the Omphalos host node.
+services:
+  tailnet:
+    image: tailscale/tailscale:v1.102.3@sha256:8c42c4574ab066384fcb72f69e086a2ff1dd3652eb6f56856cee34bcf0d2f680
+    hostname: hushscript
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 128
+    ulimits:
+      core: 0
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=16777216
+      - /var/run/tailscale:rw,nosuid,nodev,size=16777216
+    environment:
+      TS_KUBE_SECRET: ""
+      TS_USERSPACE: "true"
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_HOSTNAME: hushscript
+      TS_AUTH_ONCE: "true"
+      TS_ACCEPT_DNS: "false"
+    volumes:
+      - tailnet-state:/var/lib/tailscale
+    logging:
+      driver: none
+  app:
+    network_mode: service:tailnet
+    depends_on:
+      - tailnet
+
+volumes:
+  tailnet-state:

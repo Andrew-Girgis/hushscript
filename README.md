@@ -73,7 +73,7 @@ Use the JSON export for agents. Transcript text and filenames are untrusted data
 
 ## Private coworker access
 
-The planned entry point is Tailscale Serve with a single-use external machine share and a policy limited to Hushscript port 8445. See [docs/SHARING.md](docs/SHARING.md). There is no public password endpoint and no Tailscale Funnel configuration. Remote exposure remains disabled until access rules and allowed/denied device checks are complete. HTTPS terminates inside the protected app container; Tailscale forwards encrypted TCP.
+The planned entry point is an isolated `hushscript` Tailscale node shared with one coworker, separate from the Omphalos host node. See [docs/SHARING.md](docs/SHARING.md). Browser and API access use the same HTTPS port 8445. The owner must sign in the new node and verify remote access before sharing it. There is no public password endpoint or Tailscale Funnel configuration. HTTPS terminates inside the protected app container; Tailscale forwards encrypted TCP.
 
 ## Development
 

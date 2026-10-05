@@ -4,7 +4,7 @@ Verified locally on 2026-10-04. Host: Omphalos, i9-9900K, 32 GiB RAM, RTX 3070 8
 
 ## Automated checks
 
-- All 54 service/privacy/chunking/codec/launcher tests passed locally and inside the read-only, network-isolated, non-root Docker test container with swap disabled.
+- All 60 service/privacy/chunking/codec/launcher/node tests passed locally and inside the read-only, network-isolated, non-root Docker test container with swap disabled.
 - Seven codec round trips cover WAV/PCM, MP3, M4A/AAC, FLAC, OGG/Opus, AAC/ADTS, and WebM/Opus.
 - Browser acceptance passed: sequential uploads, cleanup ACK before the next upload, speaker toggle, safe filename display, ZIP CRC/readability, cancellation, batch/size bounds, and mobile layout. Browser inference responses are simulated.
 - Actual CPU and GPU API checks passed: public speech, silence, malformed data, two-speaker labeling, JSON/ZIP exports, and DELETE followed by 404.
@@ -13,6 +13,8 @@ Verified locally on 2026-10-04. Host: Omphalos, i9-9900K, 32 GiB RAM, RTX 3070 8
 - Container TLS passed trusted handshakes and health checks with both a throwaway localhost certificate and an actual Tailscale-managed certificate. The test dialed loopback, verified the real DNS name and CA chain, and confirmed the one-use PEM was removed after loading. No remote Serve entry was enabled.
 - Worker restrictions deny new IPv4/IPv6 sockets and disable dumps. The live app accepts its inherited listener under the same socket restriction.
 - Six WSL launcher lifecycle cases pass with simulated Windows/Docker boundaries: rejected protection, Docker startup failure, certificate failure, guard exit, guard loss, and normal shutdown. They verify guard revocation and the stop request before helper release, without contacting a Windows machine.
+- The isolated Tailscale sidecar started unauthenticated in userspace mode with a read-only root and no published host ports. A separate GPU app shared only its network namespace, passed an actual TLS health check over loopback, and both temporary containers and their credential volume were removed. No external share or authenticated node was tested.
+- Six isolated-node checks reject missing, stopped, or invalid Tailscale identities.
 - Windows guard parser, mocked fail-closed probes, and C# power-helper compilation pass in a Linux PowerShell container. These checks do not exercise Windows registry/WMI/power APIs or WSL interop.
 - Linux ARM64 test image builds; both ASR and diarization library entry points load under ARM64 emulation. All 14 chunking/format/codec tests pass there. No native ARM host or Mac inference is claimed.
 - Kernel crash-dumper checks reject loaded, unreadable, and invalid states.
@@ -51,7 +53,7 @@ After an earlier long GPU suite, the app cgroup reported a 489.9 MiB memory peak
 
 ## Remaining delivery work
 
-- Approved-device Tailscale policy, enabling the private TCP entry, and allowed/denied remote device tests. Actual certificate provisioning has passed locally.
+- Authenticate the dedicated Tailscale app node, issue its actual certificate, enable its Serve entry, and test browser/API access from an allowed coworker. The isolated app and sidecar passed a local TLS health check with zero published host ports. Actual certificate provisioning on the original Omphalos node has passed locally.
 - Actual WSL2 startup/cleanup verification, protected macOS hosting, and native ARM host inference. WSL2 CPU code and Mac preflight instructions are present; user-led Pythia testing is planned.
 - Evaluation on representative interview recordings for transcription and speaker accuracy.
 

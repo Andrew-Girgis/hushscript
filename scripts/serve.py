@@ -22,6 +22,25 @@ def inhibitors():
     )
 
 
+def configure_tls(args, command):
+    if args.isolated_share:
+        from share_node import app_running, domain
+
+        command += ["-f", str(ROOT / "compose.isolated.yaml")]
+        if app_running():
+            raise SystemExit("Stop the current Hushscript launcher before isolated sharing.")
+        name = domain(command)
+        os.environ["HUSHSCRIPT_HOSTS"] = name
+        os.environ["HUSHSCRIPT_ORIGINS"] = f"https://{name}:8445"
+        return name
+    if args.tls_domain:
+        os.environ["HUSHSCRIPT_HOSTS"] = args.tls_domain
+        os.environ["HUSHSCRIPT_ORIGINS"] = f"https://{args.tls_domain}:8445"
+    else:
+        os.environ["HUSHSCRIPT_ORIGINS"] = "https://localhost:8787,https://127.0.0.1:8787"
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--gpu", action="store_true", help="Use the NVIDIA CUDA image")
@@ -33,6 +52,11 @@ def main():
     tls = ap.add_mutually_exclusive_group()
     tls.add_argument("--tls-domain", help="Tailscale DNS name; HTTPS inside the container")
     tls.add_argument("--local-tls", action="store_true", help="Use HUSHSCRIPT_TLS_PEM from s")
+    tls.add_argument(
+        "--isolated-share",
+        action="store_true",
+        help="Serve through Hushscript's own isolated Tailscale node (native Linux)",
+    )
     args = ap.parse_args()
     pem = os.environ.pop("HUSHSCRIPT_TLS_PEM", None)
     if args.local_tls and not pem:
@@ -42,6 +66,10 @@ def main():
         or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789-." for c in args.tls_domain)
     ):
         raise SystemExit("Use the full lowercase Tailscale DNS name.")
+    if args.isolated_share and (
+        platform.system() != "Linux" or "microsoft" in platform.release().lower()
+    ):
+        raise SystemExit("Isolated sharing currently requires a native Linux host.")
     if platform.system() == "Linux" and "microsoft" in platform.release().lower():
         from serve_wsl import launch
 
@@ -63,13 +91,13 @@ def main():
     cmd = ["docker", "compose", "-f", str(ROOT / "compose.yaml")]
     if args.gpu:
         cmd += ["-f", str(ROOT / "compose.gpu.yaml")]
-    if args.tls_domain or args.local_tls:
+    name = None
+    if args.tls_domain or args.local_tls or args.isolated_share:
         cmd += ["-f", str(ROOT / "compose.tls.yaml")]
-        if args.tls_domain:
-            os.environ["HUSHSCRIPT_HOSTS"] = args.tls_domain
-            os.environ["HUSHSCRIPT_ORIGINS"] = f"https://{args.tls_domain}:8445"
-        else:
-            os.environ["HUSHSCRIPT_ORIGINS"] = "https://localhost:8787,https://127.0.0.1:8787"
+        name = configure_tls(args, cmd)
+        if args.isolated_share:
+            from share_node import domain
+
     GUARD.mkdir(parents=True, exist_ok=True)
     GUARD.chmod(0o755)
     stop = threading.Event()
@@ -156,17 +184,28 @@ def main():
             from provision_tls import provision_pem
 
             provision_pem(cmd, pem)
+        elif args.isolated_share:
+            from provision_tls import provision_pem
+            from share_node import certificate, check_app, enable
+
+            provision_pem(cmd, certificate(cmd, name))
+            check_app(cmd, name)
+            enable(cmd)
         address = (
             f"https://{args.tls_domain}:8445"
             if args.tls_domain
+            else f"https://{name}:8445"
+            if args.isolated_share
             else "https://localhost:8787"
             if args.local_tls
             else "http://127.0.0.1:8787"
         )
         print(f"Hushscript: {address} — Ctrl+C stops and clears server memory.", flush=True)
-        while not stop.wait(1):
+        while not stop.wait(5 if args.isolated_share else 1):
             if inhibitor.poll() is not None:
                 raise RuntimeError("Host sleep inhibitor stopped.")
+            if args.isolated_share and domain(cmd) != name:
+                raise RuntimeError("The isolated Tailscale node stopped or changed identity.")
         if guard_failure.is_set():
             raise RuntimeError("Host privacy verification failed; stopping Hushscript.")
     finally:
