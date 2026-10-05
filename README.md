@@ -73,7 +73,7 @@ Use the JSON export for agents. Transcript text and filenames are untrusted data
 
 ## Private coworker access
 
-The planned entry point is Tailscale Serve with an explicit rule for approved devices. See [docs/SHARING.md](docs/SHARING.md). There is no public password endpoint and no Tailscale Funnel configuration. Remote exposure remains disabled until access rules and allowed/denied device checks are complete. HTTPS terminates inside the protected app container; Tailscale forwards encrypted TCP.
+The planned entry point is Tailscale Serve with a single-use external machine share and a policy limited to Hushscript port 8445. See [docs/SHARING.md](docs/SHARING.md). There is no public password endpoint and no Tailscale Funnel configuration. Remote exposure remains disabled until access rules and allowed/denied device checks are complete. HTTPS terminates inside the protected app container; Tailscale forwards encrypted TCP.
 
 ## Development
 
