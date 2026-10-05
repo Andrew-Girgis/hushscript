@@ -4,7 +4,7 @@ Hushscript's recommended remote entry point is its **own Tailscale node** inside
 
 The browser and [HTTP API](API.md) use the same HTTPS address. A coworker who accepts the share can use both. API jobs use short-lived per-job capability tokens; Tailscale controls who can reach the app. There is no shell or host filesystem service in the app-only node.
 
-This setup has passed a local isolated-network test with a throwaway TLS certificate and no authenticated Tailscale node. Actual node authentication, certificate issuance, and access from a coworker remain to be verified. The existing Omphalos service is still local-only until the steps below are completed.
+The isolated node is running on Omphalos and its private HTTPS browser and API address passed an end-to-end silent-audio job check. The actual Tailscale certificate and raw TCP Serve route are active. Access from a coworker's device remains to be verified after they accept a share.
 
 ## Owner setup on Omphalos
 
